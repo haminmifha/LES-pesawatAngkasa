@@ -85,10 +85,14 @@
     <div id="ui-layer" class="p-4 hidden">
         <!-- Header Game: Tombol Menu & Stats -->
         <div class="flex justify-between items-start w-full relative z-20">
-            <!-- Tombol Kembali ke Menu -->
-            <div>
+            <!-- Area Tombol Kiri Atas -->
+            <div class="flex gap-2">
                 <button onclick="goToMenu()" class="btn-small flex items-center gap-2">
                     <span>🏠</span> MENU
+                </button>
+                <!-- Tombol Mute -->
+                <button id="muteBtn" onclick="toggleMute()" class="btn-small flex items-center justify-center w-10">
+                    🔊
                 </button>
             </div>
 
@@ -130,7 +134,8 @@
             </div>
         </div>
 
-        <p id="config-status" class="text-yellow-400/80 mb-8 text-sm italic flex justify-center gap-2 items-center">
+        <!-- DEBUG STATUS: Menampilkan pesan error spesifik -->
+        <p id="config-status" class="text-yellow-400/80 mb-8 text-sm italic flex flex-col justify-center gap-2 items-center text-center">
             <span class="loader"></span> Menghubungkan ke Server...
         </p>
         <button id="startBtn" class="btn opacity-50 cursor-not-allowed" disabled onclick="startGame()">MULAI MISI</button>
@@ -187,7 +192,15 @@
             }
         } catch (error) {
             console.error("Auth Error:", error);
-            document.getElementById('config-status').innerText = "Gagal koneksi server (Offline mode)";
+            let errorMsg = "Gagal koneksi server.";
+            if (error.code === 'auth/admin-restricted-operation' || error.code === 'auth/operation-not-allowed') {
+                errorMsg = "Login Anonim belum diaktifkan di Firebase Console.";
+            } else if (error.code === 'auth/network-request-failed') {
+                errorMsg = "Koneksi internet terputus.";
+            } else {
+                errorMsg = `Error: ${error.code} - ${error.message}`;
+            }
+            document.getElementById('config-status').innerText = errorMsg;
             enableStartButton();
         }
     };
@@ -254,11 +267,15 @@
                     activeQuestionsList = [];
                 }
             } else {
-                statusEl.innerText = "Data tidak ditemukan.";
+                statusEl.innerText = "Data Guru tidak ditemukan / Database Kosong.";
             }
         } catch (e) {
             console.error(e);
-            statusEl.innerText = "Gagal memuat data.";
+            if(e.code === 'permission-denied') {
+                statusEl.innerText = "Izin Ditolak: Cek 'Firestore Rules' di Firebase Console.";
+            } else {
+                statusEl.innerText = "Gagal memuat data: " + e.message;
+            }
         }
         enableStartButton();
     }
@@ -271,17 +288,14 @@
         if (gameConfig.questionGroups && gameConfig.questionGroups[selectedId]) {
             const group = gameConfig.questionGroups[selectedId];
             
-            // Expand list based on 'repeat' property
             activeQuestionsList = [];
             group.questions.forEach(q => {
                 const count = q.repeat || 1; 
                 for (let i = 0; i < count; i++) {
-                    // Clone object agar aman
                     activeQuestionsList.push({...q});
                 }
             });
             
-            // Shuffle Array
             for (let i = activeQuestionsList.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [activeQuestionsList[i], activeQuestionsList[j]] = [activeQuestionsList[j], activeQuestionsList[i]];
@@ -303,7 +317,7 @@
     
     let gameState = 'MENU';
     let score = 0;
-    let health = 6; // NYAWA 6
+    let health = 6; 
     
     let currentQuestionData = { q: "0+0", a: 0 };
     let currentDistractors = []; 
@@ -315,52 +329,51 @@
     }
     window.addEventListener('resize', resizeCanvas);
 
-    // --- AUDIO SYSTEM (SFX + BGM) ---
+    // --- AUDIO SYSTEM (FILE: musik.ogg) ---
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     const audioCtx = new AudioContext();
     
-    // Background Music (Ambient Drone)
-    let bgmNodes = [];
-    function playBackgroundMusic() {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        stopBackgroundMusic(); 
-        
-        const freqs = [110, 164.81, 196.00]; 
-        freqs.forEach((f, i) => {
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = 'sine';
-            osc.frequency.value = f;
-            gain.gain.value = 0.02; 
-            
-            const lfo = audioCtx.createOscillator();
-            lfo.frequency.value = 0.1 + (i * 0.05); 
-            const lfoGain = audioCtx.createGain();
-            lfoGain.gain.value = 0.01; 
-            
-            lfo.connect(lfoGain);
-            lfoGain.connect(gain.gain); 
-            lfo.start();
+    // Objek Musik Latar
+    const bgm = new Audio('musik.ogg');
+    bgm.loop = true;
+    bgm.volume = 0.5; // Volume background 50%
 
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start();
-            bgmNodes.push({osc, gain, lfo, lfoGain});
+    // Status Mute Global
+    let isMuted = false;
+
+    // Fungsi Kontrol Musik
+    function playBackgroundMusic() {
+        if (isMuted) return; // Jangan mainkan jika dimute
+        
+        // Memulai musik (perlu interaksi user sebelumnya)
+        bgm.play().catch(error => {
+            console.log("Autoplay dicegah oleh browser, musik akan mulai saat interaksi berikutnya.");
         });
     }
 
     function stopBackgroundMusic() {
-        bgmNodes.forEach(n => {
-            try { 
-                n.osc.stop(); n.lfo.stop(); 
-                n.osc.disconnect(); n.gain.disconnect(); 
-            } catch(e){}
-        });
-        bgmNodes = [];
+        bgm.pause();
+        bgm.currentTime = 0; // Reset ke awal
+    }
+
+    // Fungsi Toggle Mute
+    window.toggleMute = function() {
+        isMuted = !isMuted;
+        bgm.muted = isMuted;
+        
+        const btn = document.getElementById('muteBtn');
+        btn.innerText = isMuted ? "🔇" : "🔊";
+        
+        // Jika sedang bermain dan di-unmute, pastikan musik jalan
+        if (!isMuted && gameState === 'PLAYING') {
+            bgm.play().catch(e => console.log(e));
+        }
     }
 
     function playSound(type) {
+        if (isMuted) return; // Jangan mainkan SFX jika dimute
         if (audioCtx.state === 'suspended') audioCtx.resume();
+
         const osc = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
         osc.connect(gainNode);
@@ -382,25 +395,21 @@
         }
     }
 
-    // --- Logic Soal (UPDATED: Ambil dan Hapus dari Antrian) ---
+    // --- Logic Soal ---
     function generateMathProblem() {
         const qDisplay = document.getElementById('questionDisplay');
         
         if (gameConfig.mode === 'custom') {
-            // Cek apakah antrian soal habis
             if (activeQuestionsList.length === 0) {
-                // MENANG: Soal Habis
                 finishGame(true);
                 return;
             }
 
-            // Ambil soal terakhir (pop) agar jumlah berkurang
             const selected = activeQuestionsList.pop();
             
             if (selected && selected.q) {
                 currentQuestionData = selected;
                 
-                // LOGIKA TAMPILAN
                 if (selected.isQJava) {
                     qDisplay.innerText = selected.q; 
                     qDisplay.style.fontFamily = "'Genk Kobra', sans-serif";
@@ -413,10 +422,9 @@
 
                 currentDistractors = selected.distractors || [];
             } else {
-                generateMathProblem(); // Skip jika data rusak
+                generateMathProblem(); 
             }
         } else {
-            // Fallback Otomatis
             let maxNum = 10;
             if (score > 1000) maxNum = 20;
             const num1 = Math.floor(Math.random() * maxNum) + 1;
@@ -455,12 +463,11 @@
             score += 100;
             floatingTexts.push(new FloatingText("+100", enemy.x, enemy.y, '#fbbf24'));
             
-            // Hancurkan musuh lain agar layar bersih saat ganti soal
             enemies.forEach(e => {
                 if(!e.markedForDeletion) { createExplosion(e.x, e.y, 'rgba(148, 163, 184, 0.5)'); e.markedForDeletion = true; }
             });
             
-            generateMathProblem(); // Lanjut ke soal berikutnya (atau menang jika habis)
+            generateMathProblem(); 
 
         } else {
             playSound('explosion'); 
@@ -470,7 +477,7 @@
             screenShake = 10;
         }
         updateUI();
-        if (health <= 0) finishGame(false); // Kalah
+        if (health <= 0) finishGame(false); 
     }
 
     // --- Classes ---
@@ -571,10 +578,9 @@
         lasers=[]; enemies=[]; particles=[]; floatingTexts=[]; stars=[]; nebulas=[];
         for(let i=0; i<100; i++) stars.push(new BackgroundStar());
         for(let i=0; i<6; i++) nebulas.push(new NebulaGas());
-        score = 0; health = 6; // NYAWA 6
+        score = 0; health = 6; 
         enemyInterval = 1500 / (gameConfig.speed || 1); 
         
-        // REBUILD LIST SOAL SAAT RESTART
         if(gameConfig.mode === 'custom') {
             window.selectTopic(); 
         }
@@ -630,23 +636,23 @@
         document.getElementById('game-over-screen').classList.add('hidden');
         document.getElementById('ui-layer').classList.remove('hidden');
         gameState = 'PLAYING'; 
-        playBackgroundMusic(); // Start Music
+        playBackgroundMusic(); 
         init(); lastTime = performance.now(); requestAnimationFrame(animate);
     }
     window.goToMenu = function() {
         gameState = 'MENU';
-        stopBackgroundMusic(); // Stop Music
+        stopBackgroundMusic(); 
         document.getElementById('ui-layer').classList.add('hidden');
         document.getElementById('game-over-screen').classList.add('hidden');
         document.getElementById('start-screen').classList.remove('hidden');
         
         enemies = [];
         bullets = [];
-        window.selectTopic(); // Reset list soal
+        window.selectTopic(); 
     }
     window.resetGame = function() { window.goToMenu(); }
     
-    // --- END GAME & BONUS CALCULATION ---
+    // --- END GAME ---
     function finishGame(isWin) {
         gameState = 'GAMEOVER'; 
         stopBackgroundMusic(); 
@@ -657,15 +663,11 @@
         const bonusValue = document.getElementById('bonusValue');
         
         if (isWin) {
-            // Hitung Bonus: Sisa Nyawa * 100
             const bonus = Math.max(0, health) * 100;
             score += bonus;
-            
             endTitle.innerText = "MISI SELESAI!";
             endTitle.className = "text-5xl font-bold text-green-400 mb-2 hud-text";
             endMessage.innerText = "Semua soal berhasil dijawab!";
-            
-            // Tampilkan info bonus
             if(bonus > 0) {
                 bonusInfo.classList.remove('hidden');
                 bonusValue.innerText = bonus;
@@ -673,7 +675,6 @@
                 bonusInfo.classList.add('hidden');
             }
         } else {
-            // Kalah (Nyawa habis)
             endTitle.innerText = "GAME OVER";
             endTitle.className = "text-5xl font-bold text-red-500 mb-2 hud-text";
             endMessage.innerText = "Jangan menyerah, coba lagi!";
