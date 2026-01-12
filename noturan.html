@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pengaturan Game Angkasa (Google Auth)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Import Font Google (Opsional/Cadangan) -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Javanese&family=Noto+Naskh+Arabic&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- FONT CUSTOM --- */
+        @font-face {
+            font-family: 'Genk Kobra';
+            src: url('Genk-Kobra ndomblong Rev.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        /* Kelas Utility Font */
+        .font-jawa { font-family: 'Genk Kobra', 'Noto Sans Javanese', sans-serif; }
+        .font-latin { font-family: 'Segoe UI', sans-serif; }
+
+        body { background-color: #0f172a; color: white; font-family: 'Segoe UI', sans-serif; }
+        
+        /* Input Style - Warna diseragamkan (Permintaan No. 2) */
+        .input-dark { 
+            background: #1e293b; 
+            border: 1px solid #475569; 
+            color: white; 
+            padding: 10px; 
+            border-radius: 8px; 
+            width: 100%; 
+            transition: border-color 0.2s, font-family 0.2s; /* Transisi font halus */
+        }
+        .input-dark:focus { outline: none; border-color: #3b82f6; }
+        
+        /* Checkbox Custom */
+        .aksara-toggle {
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 0.25rem;
+        }
+        .aksara-toggle input:checked + span { color: #facc15; font-weight: bold; }
+
+        .btn { padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; }
+        .btn:active { transform: scale(0.95); }
+        .btn-sm { padding: 6px 12px; font-size: 0.85rem; }
+        
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
+        
+        .btn-secondary { background: #475569; color: white; }
+        .btn-secondary:hover { background: #334155; }
+        
+        .btn-success { background: #22c55e; color: white; }
+        .btn-success:hover { background: #16a34a; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4); }
+        
+        .btn-warning { background: #f59e0b; color: white; }
+        .btn-warning:hover { background: #d97706; }
+
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+
+        .btn-google { background: white; color: #1f2937; border: 1px solid #e5e7eb; }
+        .btn-google:hover { background: #f9fafb; }
+
+        .loader { border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid #3b82f6; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Toast Animation */
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .toast { animation: slideIn 0.3s ease-out forwards; }
+
+        /* Toggle Switch CSS */
+        input:checked ~ .block { background-color: #22c55e; }
+        input:checked ~ .dot { transform: translateX(100%); }
+    </style>
+</head>
+<body class="p-6 max-w-2xl mx-auto pb-20">
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-3 pointer-events-none"></div>
+
+    <!-- Header dengan Profile Section -->
+    <div class="flex flex-col md:flex-row justify-between items-center mb-8 border-b border-slate-700 pb-4 gap-4">
+        <div>
+            <h1 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">⚙️ Admin Game</h1>
+            <p class="text-slate-400 text-sm">Kelola soal dan konfigurasi game</p>
+        </div>
+        
+        <!-- User Profile Area -->
+        <div id="userSection" class="flex items-center gap-3">
+            <button id="btnLogin" onclick="window.loginGoogle()" class="btn btn-google text-sm hidden">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5">
+                Login dengan Google
+            </button>
+
+            <div id="profileArea" class="hidden flex items-center gap-3 bg-slate-800 p-2 pr-4 rounded-full border border-slate-600">
+                <img id="userPhoto" src="" alt="Profile" class="w-8 h-8 rounded-full bg-slate-600">
+                <div class="flex flex-col">
+                    <span id="userName" class="text-xs font-bold text-white leading-tight">User</span>
+                    <span class="text-[10px] text-green-400 leading-tight">● Online</span>
+                </div>
+                <button onclick="window.logout()" class="ml-2 text-xs text-red-400 hover:text-red-300 font-bold border border-red-900/50 bg-red-900/20 px-2 py-1 rounded">
+                    Logout
+                </button>
+            </div>
+
+            <div id="authLoader" class="flex items-center gap-2 text-xs text-slate-400 px-3 py-1.5 bg-slate-800 rounded-full border border-slate-600">
+                <span class="loader"></span> Memuat Akun...
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. Pengaturan Kecepatan -->
+    <section class="bg-slate-800/50 p-6 rounded-2xl mb-6 border border-slate-700 backdrop-blur-sm">
+        <h2 class="text-lg font-bold mb-4 text-blue-300 flex items-center gap-2">🚀 Kecepatan Meteor</h2>
+        <div class="flex items-center gap-4 bg-slate-900/50 p-4 rounded-xl">
+            <span class="text-sm font-semibold text-slate-400">Lambat</span>
+            <input type="range" id="speedInput" min="0.5" max="3" step="0.5" value="1" class="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500">
+            <span class="text-sm font-semibold text-slate-400">Cepat</span>
+        </div>
+        <p class="text-center mt-3 text-sm text-slate-300">Level Saat Ini: <span id="speedValue" class="font-bold text-white bg-blue-600 px-2 py-0.5 rounded ml-1">Normal (1x)</span></p>
+    </section>
+
+    <!-- 2. Pengaturan Mode Soal -->
+    <section class="bg-slate-800/50 p-6 rounded-2xl mb-6 border border-slate-700 backdrop-blur-sm">
+        <h2 class="text-lg font-bold mb-4 text-blue-300 flex items-center gap-2">📚 Mode Soal</h2>
+        
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <label class="flex items-center justify-center gap-3 cursor-pointer bg-slate-900/50 p-4 rounded-xl border border-slate-700 hover:border-blue-500 transition-colors">
+                <input type="radio" name="gameMode" value="auto" checked onchange="window.toggleMode()" class="w-5 h-5 accent-blue-500">
+                <span class="font-semibold">🤖 Otomatis (Acak)</span>
+            </label>
+            <label class="flex items-center justify-center gap-3 cursor-pointer bg-slate-900/50 p-4 rounded-xl border border-slate-700 hover:border-blue-500 transition-colors">
+                <input type="radio" name="gameMode" value="custom" onchange="window.toggleMode()" class="w-5 h-5 accent-blue-500">
+                <span class="font-semibold">✏️ Custom (Buat Sendiri)</span>
+            </label>
+        </div>
+
+        <!-- 3. Pengaturan Font Global -->
+        <div class="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700">
+            <h3 class="text-sm font-bold text-slate-300 mb-2 uppercase">🔤 Font Utama</h3>
+            <select id="fontSelect" class="input-dark bg-slate-800 cursor-pointer">
+                <option value="'Genk Kobra', sans-serif">Genk Kobra (File Lokal)</option>
+                <option value="'Segoe UI', sans-serif">Standar (Latin)</option>
+                <option value="'Noto Sans Javanese', sans-serif">Google Noto Javanese</option>
+                <option value="'Noto Naskh Arabic', serif">Google Noto Arabic</option>
+            </select>
+            <p class="text-[10px] text-slate-500 mt-2">*Pastikan file "Genk-Kobra ndomblong Rev.ttf" ada di folder yang sama.</p>
+        </div>
+
+        <!-- Area Custom (Hidden by default) -->
+        <div id="customArea" class="hidden transition-all duration-300">
+            
+            <!-- Manajemen Kelompok Soal -->
+            <div class="bg-slate-900 p-5 rounded-xl border border-slate-600 mb-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-3 gap-3">
+                    <label class="text-sm font-bold text-slate-300 uppercase tracking-wider">📂 Kelompok Soal (Topik)</label>
+                    
+                    <div class="flex items-center gap-4 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+                        <div class="flex items-center gap-2 mr-2">
+                            <label for="groupStatusToggle" class="flex items-center cursor-pointer relative">
+                                <input type="checkbox" id="groupStatusToggle" class="sr-only" onchange="window.toggleGroupStatus()">
+                                <div class="block bg-slate-600 w-10 h-6 rounded-full transition-colors duration-300"></div>
+                                <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300"></div>
+                            </label>
+                            <span id="groupStatusLabel" class="text-xs font-bold text-slate-400">Aktif</span>
+                        </div>
+                        <div class="h-4 w-px bg-slate-600"></div>
+                        <div class="flex gap-3 text-xs font-semibold">
+                            <button onclick="window.renameGroup()" class="text-yellow-400 hover:text-yellow-300 flex items-center gap-1">✏️ Ubah Nama</button>
+                            <button onclick="window.deleteGroup()" class="text-red-400 hover:text-red-300 flex items-center gap-1">🗑️ Hapus</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex gap-2">
+                    <div class="relative flex-grow">
+                        <select id="groupSelect" onchange="window.switchGroup()" class="input-dark w-full font-bold text-lg cursor-pointer appearance-none bg-slate-800 pr-10">
+                            <!-- Options filled by JS -->
+                        </select>
+                        <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">▼</div>
+                    </div>
+                    <button onclick="window.addGroup()" class="btn btn-secondary whitespace-nowrap border border-slate-600">➕ Buat Baru</button>
+                </div>
+            </div>
+
+            <!-- Form Tambah/Edit Soal -->
+            <div class="bg-slate-800/80 p-5 rounded-xl border border-slate-600 mb-4 relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                <h3 class="text-sm font-bold text-slate-300 mb-4 flex justify-between items-center">
+                    <span id="formTitle">📝 TAMBAH SOAL BARU</span>
+                    <span class="text-xs font-normal text-slate-500 bg-slate-900 px-2 py-1 rounded">Grup: <span id="activeGroupNameDisplay" class="text-blue-400 font-bold">...</span></span>
+                </h3>
+                
+                <input type="hidden" id="editIndex" value="-1">
+
+                <!-- Grid Form -->
+                <div class="grid gap-6 mb-4">
+                    
+                    <!-- Soal -->
+                    <div>
+                        <label class="text-xs text-slate-400 mb-1 block uppercase font-bold">Pertanyaan / Soal</label>
+                        <input type="text" id="inputQ" placeholder="Ketik soal..." class="input-dark text-lg font-latin">
+                        <!-- Toggle Aksara Jawa -->
+                        <label class="aksara-toggle">
+                            <input type="checkbox" id="checkQ" onchange="window.toggleInputFont('inputQ', this.checked)">
+                            <span>Gunakan Aksara Jawa (Genk Kobra)</span>
+                        </label>
+                    </div>
+
+                    <!-- Jawaban & Pengecoh -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Jawaban Benar -->
+                        <div>
+                            <label class="text-xs text-slate-300 mb-1 block uppercase font-bold flex items-center gap-1">Jawaban Benar</label>
+                            <input type="text" id="inputCorrect" placeholder="Benar" class="input-dark">
+                            <label class="aksara-toggle">
+                                <input type="checkbox" id="checkCorrect" onchange="window.toggleInputFont('inputCorrect', this.checked)">
+                                <span>Aksara Jawa?</span>
+                            </label>
+                        </div>
+                        
+                        <!-- Pengecoh 1 -->
+                        <div>
+                            <label class="text-xs text-slate-400 mb-1 block uppercase font-bold flex items-center gap-1">Pengecoh 1</label>
+                            <input type="text" id="inputWrong1" placeholder="Salah 1" class="input-dark">
+                            <label class="aksara-toggle">
+                                <input type="checkbox" id="checkWrong1" onchange="window.toggleInputFont('inputWrong1', this.checked)">
+                                <span>Aksara Jawa?</span>
+                            </label>
+                        </div>
+                        
+                        <!-- Pengecoh 2 -->
+                        <div>
+                            <label class="text-xs text-slate-400 mb-1 block uppercase font-bold flex items-center gap-1">Pengecoh 2</label>
+                            <input type="text" id="inputWrong2" placeholder="Salah 2" class="input-dark">
+                            <label class="aksara-toggle">
+                                <input type="checkbox" id="checkWrong2" onchange="window.toggleInputFont('inputWrong2', this.checked)">
+                                <span>Aksara Jawa?</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Pengaturan Tambahan: Repetisi -->
+                    <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-700">
+                        <label class="text-xs text-blue-300 mb-1 block uppercase font-bold">Jumlah Perulangan Soal Ini</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="inputRepeat" value="1" min="1" max="10" class="input-dark w-20 text-center font-bold">
+                            <span class="text-sm text-slate-500">kali muncul dalam permainan</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-2">
+                    <button id="btnSubmitQuestion" onclick="window.saveQuestionAction()" class="btn btn-primary flex-grow shadow-lg shadow-blue-900/50">
+                        ➕ Tambahkan ke Daftar
+                    </button>
+                    <button id="btnCancelEdit" onclick="window.cancelEdit()" class="btn btn-secondary hidden w-1/3 hover:bg-slate-600">
+                        Batal
+                    </button>
+                </div>
+            </div>
+            
+            <!-- List Soal -->
+            <div class="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden shadow-inner">
+                <div class="bg-slate-800 p-3 border-b border-slate-700 flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-slate-300">📋 Daftar Soal (<span id="questionCount">0</span>)</h3>
+                </div>
+                <div class="max-h-[350px] overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
+                    <ul id="questionList" class="space-y-2">
+                        <!-- List soal akan muncul di sini -->
+                    </ul>
+                    <div id="emptyMsg" class="py-8 text-center text-slate-500 italic">
+                        <p class="text-2xl mb-2">📭</p>
+                        Belum ada soal di grup ini.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tombol Simpan Global -->
+    <div class="fixed bottom-0 left-0 w-full p-4 bg-slate-900/90 border-t border-slate-700 backdrop-blur md:static md:bg-transparent md:border-none md:p-0">
+        <div class="max-w-2xl mx-auto flex flex-col gap-2">
+            <button id="btnSave" onclick="window.saveSettings()" class="btn btn-success w-full py-4 text-lg shadow-lg shadow-green-900/20 opacity-50 cursor-not-allowed transition-all" disabled>
+                💾 SIMPAN PERUBAHAN KE CLOUD
+            </button>
+            <p class="text-xs text-center text-slate-500">*Data disimpan sesuai akun yang login saat ini.</p>
+        </div>
+    </div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // --- Konfigurasi User ---
+    const userFirebaseConfig = {
+        apiKey: "AIzaSyDONREHxQdqdTu-Y5XC2Pdt3KOqXMN5JIw",
+        authDomain: "les-pesawatluarangkasa.firebaseapp.com",
+        projectId: "les-pesawatluarangkasa",
+        storageBucket: "les-pesawatluarangkasa.firebasestorage.app",
+        messagingSenderId: "426230505310",
+        appId: "1:426230505310:web:6638a3a08b7e10e936b9cf"
+    };
+
+    const isCanvasEnvironment = typeof __firebase_config !== 'undefined';
+    const firebaseConfig = isCanvasEnvironment ? JSON.parse(__firebase_config) : userFirebaseConfig;
+    
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const googleProvider = new GoogleAuthProvider();
+
+    let currentUser = null;
+    let questionGroups = { 'default': { name: 'Umum (Default)', questions: [], isEnabled: true } };
+    let activeGroupId = 'default';
+
+    // --- FUNGSI UTILITAS FONT ---
+    window.toggleInputFont = function(inputId, isJava) {
+        const input = document.getElementById(inputId);
+        if (isJava) {
+            input.classList.remove('font-latin');
+            input.style.fontFamily = "'Genk Kobra', sans-serif";
+            input.style.fontSize = "1.5rem"; // Aksara Jawa biasanya butuh ukuran lebih besar
+        } else {
+            input.style.fontFamily = "'Segoe UI', sans-serif";
+            input.classList.add('font-latin');
+            input.style.fontSize = "1rem";
+        }
+    };
+
+    // --- Auth Functions ---
+    window.loginGoogle = async () => {
+        try {
+            await signInWithPopup(auth, googleProvider);
+        } catch (error) {
+            console.error(error);
+            if (error.code === 'auth/unauthorized-domain') {
+                const currentDomain = window.location.hostname;
+                alert(`Domain "${currentDomain}" belum diizinkan di Firebase!\n\nCara memperbaiki:\n1. Buka Firebase Console > Authentication > Settings > Authorized domains.\n2. Tambahkan domain: ${currentDomain}`);
+            } else if (isCanvasEnvironment) {
+                alert("Gagal Login: " + error.message + "\n\nTips: Jika di Preview, coba download file dan jalankan di localhost.");
+            } else if (error.code === 'auth/operation-not-allowed') {
+                alert("Login Google belum diaktifkan! Buka Firebase Console > Authentication > Sign-in method, lalu aktifkan Google.");
+            } else {
+                window.showToast("Gagal Login: " + error.message, "error");
+            }
+        }
+    };
+
+    window.logout = async () => {
+        try { await signOut(auth); } catch (error) { console.error(error); }
+    };
+
+    // --- Helper untuk Path Firestore ---
+    function getSettingsDocRef() {
+        if (!currentUser) return null;
+        if (isCanvasEnvironment) {
+            return doc(db, 'artifacts', appId, 'users', currentUser.uid, 'game_data', 'settings');
+        } else {
+            return doc(db, 'users', currentUser.uid, 'game_data', 'settings');
+        }
+    }
+
+    // --- Toast Notification System ---
+    window.showToast = function(msg, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        let bgClass = 'bg-slate-800 border-slate-600 text-white';
+        let icon = 'ℹ️';
+        if (type === 'success') { bgClass = 'bg-green-900 border-green-600 text-green-100'; icon = '✅'; }
+        if (type === 'error') { bgClass = 'bg-red-900 border-red-600 text-red-100'; icon = '⚠️'; }
+        if (type === 'warning') { bgClass = 'bg-yellow-900 border-yellow-600 text-yellow-100'; icon = '🚧'; }
+        toast.className = `toast pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-lg border shadow-xl ${bgClass} min-w-[300px]`;
+        toast.innerHTML = `<span class="text-xl">${icon}</span><span class="font-medium text-sm">${msg}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0'; toast.style.transform = 'translateY(-20px)';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    // --- UI Update Function for Auth State ---
+    function updateAuthUI(user) {
+        const loginBtn = document.getElementById('btnLogin');
+        const profileArea = document.getElementById('profileArea');
+        const authLoader = document.getElementById('authLoader');
+        const userPhoto = document.getElementById('userPhoto');
+        const userName = document.getElementById('userName');
+
+        authLoader.classList.add('hidden');
+
+        if (user && !user.isAnonymous) {
+            loginBtn.classList.add('hidden');
+            profileArea.classList.remove('hidden');
+            profileArea.classList.add('flex');
+            userPhoto.src = user.photoURL || 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/person.svg';
+            userName.innerText = user.displayName || user.email;
+        } else {
+            profileArea.classList.add('hidden');
+            profileArea.classList.remove('flex');
+            loginBtn.classList.remove('hidden');
+        }
+    }
+
+    // --- Auth Observer ---
+    const initAuth = async () => {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            try { await signInWithCustomToken(auth, __initial_auth_token); } catch(e) { console.error(e); }
+        }
+        onAuthStateChanged(auth, async (user) => {
+            currentUser = user;
+            updateAuthUI(user);
+            if (user) {
+                enableControls();
+                questionGroups = { 'default': { name: 'Umum (Default)', questions: [], isEnabled: true } };
+                activeGroupId = 'default';
+                await loadSettingsFromFirebase();
+            }
+        });
+    };
+    initAuth();
+
+    // --- Data Loading ---
+    async function loadSettingsFromFirebase() {
+        if (!currentUser) return;
+        try {
+            const docRef = getSettingsDocRef();
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                document.getElementById('speedInput').value = data.speed || 1;
+                window.updateSpeedLabel(data.speed || 1);
+                
+                // LOAD FONT
+                const fontSelect = document.getElementById('fontSelect');
+                if (data.fontFamily) {
+                    fontSelect.value = data.fontFamily;
+                }
+
+                if (data.mode === 'custom') { document.querySelector('input[value="custom"]').checked = true; } 
+                else { document.querySelector('input[value="auto"]').checked = true; }
+                
+                if (data.questionGroups) {
+                    questionGroups = data.questionGroups;
+                    activeGroupId = data.activeGroupId || Object.keys(questionGroups)[0];
+                    if (!questionGroups[activeGroupId]) activeGroupId = Object.keys(questionGroups)[0];
+                } else if (data.questions && data.questions.length > 0) {
+                    questionGroups = { 'default': { name: 'Soal Lama', questions: data.questions, isEnabled: true } };
+                    activeGroupId = 'default';
+                }
+            }
+            window.toggleMode();
+            renderGroupDropdown();
+            window.renderList();
+            window.showToast(`Halo, ${currentUser.displayName || 'Pengguna'}! Data dimuat.`, "success");
+        } catch (e) {
+            console.error("Error loading:", e);
+            window.showToast("Memulai dengan data baru.", "info");
+        }
+    }
+
+    // --- Group Logic ---
+    function renderGroupDropdown() {
+        const select = document.getElementById('groupSelect');
+        select.innerHTML = '';
+        Object.keys(questionGroups).forEach(key => {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.text = questionGroups[key].name;
+            if(!questionGroups[key].hasOwnProperty('isEnabled')) questionGroups[key].isEnabled = true; // Backward compatibility
+            if(!questionGroups[key].isEnabled) opt.text += " (Nonaktif)";
+            if (key === activeGroupId) opt.selected = true;
+            select.appendChild(opt);
+        });
+        const currentGroup = questionGroups[activeGroupId] || { name: '...', isEnabled: true };
+        document.getElementById('activeGroupNameDisplay').innerText = currentGroup.name;
+        
+        // Update Toggle Switch UI
+        const toggle = document.getElementById('groupStatusToggle');
+        const label = document.getElementById('groupStatusLabel');
+        const isEnabled = currentGroup.isEnabled !== false; // Default true
+        toggle.checked = isEnabled;
+        label.innerText = isEnabled ? "Aktif" : "Nonaktif";
+        label.className = `text-xs font-bold ${isEnabled ? 'text-green-400' : 'text-slate-500'}`;
+
+        window.cancelEdit();
+    }
+
+    window.switchGroup = function() {
+        activeGroupId = document.getElementById('groupSelect').value;
+        renderGroupDropdown(); 
+        window.renderList();
+    };
+
+    window.toggleGroupStatus = function() {
+        if (!questionGroups[activeGroupId]) return;
+        const toggle = document.getElementById('groupStatusToggle');
+        questionGroups[activeGroupId].isEnabled = toggle.checked;
+        
+        renderGroupDropdown();
+        window.showToast(`Grup ${toggle.checked ? 'Diaktifkan' : 'Dinonaktifkan'}`, "info");
+    };
+
+    window.addGroup = function() {
+        const name = prompt("Masukkan Nama Kelompok Soal Baru:");
+        if (name && name.trim() !== "") {
+            const newId = 'grp_' + Math.random().toString(36).substr(2, 9);
+            questionGroups[newId] = { name: name.trim(), questions: [], isEnabled: true };
+            activeGroupId = newId;
+            renderGroupDropdown();
+            window.renderList();
+            window.showToast(`Grup "${name}" dibuat`, "success");
+        }
+    };
+
+    window.renameGroup = function() {
+        const currentName = questionGroups[activeGroupId].name;
+        const newName = prompt("Ubah nama grup:", currentName);
+        if (newName && newName.trim() !== "" && newName !== currentName) {
+            questionGroups[activeGroupId].name = newName.trim();
+            renderGroupDropdown();
+            window.showToast("Nama grup diperbarui", "success");
+        }
+    };
+
+    window.deleteGroup = function() {
+        if (Object.keys(questionGroups).length <= 1) {
+            window.showToast("Minimal harus ada satu grup tersisa", "error");
+            return;
+        }
+        if (confirm(`Yakin ingin menghapus grup "${questionGroups[activeGroupId].name}"?`)) {
+            delete questionGroups[activeGroupId];
+            activeGroupId = Object.keys(questionGroups)[0];
+            renderGroupDropdown();
+            window.renderList();
+            window.showToast("Grup berhasil dihapus", "success");
+        }
+    };
+
+    // --- Question Logic (CRUD) ---
+    window.saveQuestionAction = function() {
+        const q = document.getElementById('inputQ').value.trim();
+        const checkQ = document.getElementById('checkQ').checked;
+        
+        const correct = document.getElementById('inputCorrect').value.trim();
+        const checkCorrect = document.getElementById('checkCorrect').checked;
+        
+        const w1 = document.getElementById('inputWrong1').value.trim();
+        const checkWrong1 = document.getElementById('checkWrong1').checked;
+        
+        const w2 = document.getElementById('inputWrong2').value.trim();
+        const checkWrong2 = document.getElementById('checkWrong2').checked;
+        
+        const repeat = parseInt(document.getElementById('inputRepeat').value) || 1;
+        const editIndex = parseInt(document.getElementById('editIndex').value);
+
+        if (!q || !correct || !w1 || !w2) {
+            window.showToast("Semua kolom harus diisi!", "warning");
+            return;
+        }
+
+        const parseIfNum = (val) => isNaN(val) ? val : Number(val);
+        
+        // Simpan Data Soal (termasuk config font per bagian)
+        const newQuestionObj = { 
+            q: q, isQJava: checkQ,
+            a: parseIfNum(correct), isAJava: checkCorrect,
+            distractors: [parseIfNum(w1), parseIfNum(w2)],
+            isD1Java: checkWrong1,
+            isD2Java: checkWrong2,
+            repeat: repeat
+        };
+
+        const currentQuestions = questionGroups[activeGroupId].questions;
+
+        if (editIndex >= 0) {
+            currentQuestions[editIndex] = newQuestionObj;
+            window.showToast("Soal berhasil diperbarui", "success");
+        } else {
+            currentQuestions.push(newQuestionObj);
+            window.showToast("Soal berhasil ditambahkan", "success");
+        }
+        window.cancelEdit();
+        window.renderList();
+    };
+
+    window.editQuestion = function(index) {
+        const currentQuestions = questionGroups[activeGroupId].questions;
+        const item = currentQuestions[index];
+        
+        // Load Values
+        document.getElementById('inputQ').value = item.q;
+        document.getElementById('inputCorrect').value = item.a;
+        document.getElementById('inputWrong1').value = item.distractors[0];
+        document.getElementById('inputWrong2').value = item.distractors[1];
+        document.getElementById('inputRepeat').value = item.repeat || 1;
+        document.getElementById('editIndex').value = index;
+        
+        // Load Checkboxes & Update Styles
+        const setCheck = (id, checked, inputId) => {
+            const el = document.getElementById(id);
+            el.checked = !!checked;
+            window.toggleInputFont(inputId, el.checked);
+        };
+
+        setCheck('checkQ', item.isQJava, 'inputQ');
+        setCheck('checkCorrect', item.isAJava, 'inputCorrect');
+        setCheck('checkWrong1', item.isD1Java, 'inputWrong1');
+        setCheck('checkWrong2', item.isD2Java, 'inputWrong2');
+        
+        // UI Changes
+        document.getElementById('btnSubmitQuestion').innerText = "💾 Simpan Perubahan";
+        document.getElementById('btnSubmitQuestion').classList.remove('btn-primary');
+        document.getElementById('btnSubmitQuestion').classList.add('btn-warning');
+        document.getElementById('btnCancelEdit').classList.remove('hidden');
+        document.getElementById('formTitle').innerText = "✏️ EDIT SOAL";
+        document.getElementById('inputQ').focus();
+    };
+
+    window.cancelEdit = function() {
+        // Reset Inputs
+        const inputs = ['inputQ', 'inputCorrect', 'inputWrong1', 'inputWrong2'];
+        inputs.forEach(id => {
+            document.getElementById(id).value = '';
+            window.toggleInputFont(id, false); // Reset font ke latin
+        });
+        
+        // Reset Checkboxes
+        document.querySelectorAll('.aksara-toggle input').forEach(el => el.checked = false);
+        
+        document.getElementById('inputRepeat').value = '1';
+        document.getElementById('editIndex').value = '-1';
+        
+        document.getElementById('btnSubmitQuestion').innerText = "➕ Tambahkan ke Daftar";
+        document.getElementById('btnSubmitQuestion').classList.add('btn-primary');
+        document.getElementById('btnSubmitQuestion').classList.remove('btn-warning');
+        document.getElementById('btnCancelEdit').classList.add('hidden');
+        document.getElementById('formTitle').innerText = "📝 TAMBAH SOAL BARU";
+    };
+
+    window.removeQuestion = function(index) {
+        if(confirm("Hapus soal ini?")) {
+            questionGroups[activeGroupId].questions.splice(index, 1);
+            window.renderList();
+            window.showToast("Soal dihapus", "info");
+            if(document.getElementById('editIndex').value == index) window.cancelEdit();
+        }
+    };
+
+    window.renderList = function() {
+        const list = document.getElementById('questionList');
+        const emptyMsg = document.getElementById('emptyMsg');
+        const countDisplay = document.getElementById('questionCount');
+        list.innerHTML = '';
+        const currentQuestions = questionGroups[activeGroupId] ? questionGroups[activeGroupId].questions : [];
+        countDisplay.innerText = currentQuestions.length;
+
+        if (!currentQuestions || currentQuestions.length === 0) {
+            emptyMsg.classList.remove('hidden');
+            return;
+        }
+        emptyMsg.classList.add('hidden');
+
+        currentQuestions.forEach((item, index) => {
+            const li = document.createElement('li');
+            li.className = "flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-800 p-3 rounded-lg border border-slate-700 hover:border-blue-500/50 transition-colors group";
+            
+            // Helper font style
+            const fontStyle = (isJava) => isJava ? "font-family: 'Genk Kobra', sans-serif;" : "";
+            
+            li.innerHTML = `
+                <div class="flex flex-col gap-1 flex-grow mb-2 md:mb-0">
+                    <span class="font-bold text-white text-lg" style="${fontStyle(item.isQJava)}">${item.q}</span>
+                    <div class="flex gap-2 text-sm flex-wrap items-center">
+                        <span class="text-green-300 bg-green-900/40 px-2 py-0.5 rounded border border-green-800" style="${fontStyle(item.isAJava)}">✅ ${item.a}</span>
+                        <span class="text-red-300 bg-red-900/40 px-2 py-0.5 rounded border border-red-800" style="${fontStyle(item.isD1Java)}">❌ ${item.distractors.join(', ')}</span>
+                        ${item.repeat > 1 ? `<span class="text-blue-300 text-xs bg-blue-900/40 px-2 py-0.5 rounded border border-blue-800">🔄 ${item.repeat}x</span>` : ''}
+                    </div>
+                </div>
+                <div class="flex gap-2 self-end md:self-center opacity-80 group-hover:opacity-100 transition-opacity">
+                    <button onclick="window.editQuestion(${index})" class="btn btn-sm btn-warning shadow-none" title="Edit Soal">✏️ Edit</button>
+                    <button onclick="window.removeQuestion(${index})" class="btn btn-sm btn-danger shadow-none" title="Hapus Soal">🗑️</button>
+                </div>
+            `;
+            list.appendChild(li);
+        });
+    };
+
+    // --- Main Save Function ---
+    window.saveSettings = async function() {
+        if (!currentUser) {
+            window.showToast("Silakan Login terlebih dahulu!", "error");
+            return;
+        }
+
+        const btn = document.getElementById('btnSave');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = `<span class="loader"></span> MENYIMPAN...`;
+        btn.disabled = true;
+
+        const speed = parseFloat(document.getElementById('speedInput').value);
+        const font = document.getElementById('fontSelect').value; // Ambil nilai font
+        const mode = document.querySelector('input[name="gameMode"]:checked').value;
+        const currentQuestions = questionGroups[activeGroupId] ? questionGroups[activeGroupId].questions : [];
+
+        if (mode === 'custom' && currentQuestions.length === 0) {
+            window.showToast(`Peringatan: Grup "${questionGroups[activeGroupId].name}" masih kosong.`, "warning");
+        }
+
+        const configData = {
+            speed: speed,
+            fontFamily: font, 
+            mode: mode,
+            questionGroups: questionGroups,
+            activeGroupId: activeGroupId,
+            questions: currentQuestions, 
+            updatedAt: new Date().toISOString()
+        };
+
+        try {
+            const docRef = getSettingsDocRef();
+            await setDoc(docRef, configData);
+            localStorage.setItem('mathGameConfig', JSON.stringify(configData));
+            window.showToast("Pengaturan berhasil disimpan ke Cloud!", "success");
+        } catch (e) {
+            console.error("Error saving:", e);
+            if (e.code === 'permission-denied') {
+                window.showToast("GAGAL: Izin ditolak. Cek 'Firestore Rules'.", "error");
+            } else {
+                window.showToast("Gagal menyimpan: " + e.message, "error");
+            }
+        } finally {
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+        }
+    };
+
+    // --- Helpers UI ---
+    function enableControls() {
+        const btn = document.getElementById('btnSave');
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+
+    window.updateSpeedLabel = function(val) {
+        let label = "Normal (1x)";
+        if(val <= 0.5) label = "Sangat Lambat (0.5x)";
+        else if(val >= 2) label = "Sangat Cepat (" + val + "x)";
+        else label = val + "x";
+        document.getElementById('speedValue').innerText = label;
+    };
+
+    window.toggleMode = function() {
+        const isCustom = document.querySelector('input[name="gameMode"]:checked').value === 'custom';
+        const area = document.getElementById('customArea');
+        if (isCustom) {
+            area.classList.remove('hidden');
+            setTimeout(() => area.classList.remove('opacity-0', 'scale-95'), 10);
+        } else {
+            area.classList.add('hidden');
+        }
+    };
+
+    // Update list preview saat font diganti
+    document.getElementById('fontSelect').addEventListener('change', (e) => {
+        window.renderList();
+    });
+
+    document.getElementById('speedInput').addEventListener('input', (e) => {
+        window.updateSpeedLabel(e.target.value);
+    });
+
+</script>
+</body>
+</html>

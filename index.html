@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Angkasa Matematika - Online</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Import Font Google sebagai cadangan -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Javanese&family=Noto+Naskh+Arabic&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- FONT CUSTOM LOKAL --- */
+        @font-face {
+            font-family: 'Genk Kobra';
+            src: url('Genk-Kobra ndomblong Rev.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        /* ANIMASI BACKGROUND */
+        @keyframes spaceShift {
+            0% { background-color: #0f172a; }   
+            33% { background-color: #1e1b4b; }  
+            66% { background-color: #022c22; }  
+            100% { background-color: #0f172a; } 
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            animation: spaceShift 40s infinite linear;
+            touch-action: none;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: background-color 2s ease;
+        }
+        canvas { display: block; cursor: crosshair; }
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column; justify-content: space-between;
+        }
+        .hud-text { text-shadow: 2px 2px 0 #000; }
+        #start-screen, #game-over-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.75); 
+            backdrop-filter: blur(8px);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 10; pointer-events: auto;
+        }
+        .btn {
+            background: linear-gradient(to bottom, #3b82f6, #2563eb);
+            border: 2px solid #60a5fa; color: white; padding: 15px 40px;
+            font-size: 1.5rem; border-radius: 50px; cursor: pointer; text-transform: uppercase;
+            font-weight: bold; box-shadow: 0 4px 15px rgba(37, 99, 235, 0.5);
+            transition: transform 0.1s, box-shadow 0.3s;
+        }
+        .btn:hover { box-shadow: 0 0 25px rgba(59, 130, 246, 0.8); }
+        .btn:active { transform: scale(0.95); }
+        
+        .btn-small {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #475569;
+            color: #cbd5e1;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: all 0.2s;
+        }
+        .btn-small:hover { background: #334155; color: white; }
+
+        .hidden { display: none !important; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        .math-question { animation: pulse 2s infinite; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-layer" class="p-4 hidden">
+        <!-- Header Game: Tombol Menu & Stats -->
+        <div class="flex justify-between items-start w-full relative z-20">
+            <!-- Tombol Kembali ke Menu -->
+            <div>
+                <button onclick="goToMenu()" class="btn-small flex items-center gap-2">
+                    <span>🏠</span> MENU
+                </button>
+            </div>
+
+            <!-- Stats -->
+            <div class="text-right text-white">
+                <div class="text-xl font-bold hud-text text-yellow-400">SKOR: <span id="scoreDisplay">0</span></div>
+                <div class="text-xl font-bold hud-text text-red-400">NYAWA: <span id="healthDisplay">6</span></div>
+            </div>
+        </div>
+
+        <!-- Area Tengah: Soal -->
+        <div class="absolute top-0 left-0 w-full h-full flex flex-col justify-start items-center pt-20 pointer-events-none">
+            <div class="bg-slate-900/80 border border-slate-400 rounded-xl px-6 py-4 shadow-lg backdrop-blur-md math-question min-w-[200px] text-center">
+                <span id="questionDisplay" class="text-3xl font-bold text-white tracking-wider" style="text-shadow: 0 0 10px rgba(255,255,255,0.5);">SIAP?</span>
+            </div>
+        </div>
+
+        <!-- Footer: Instruksi -->
+        <div class="absolute bottom-10 w-full text-center pointer-events-none">
+            <div id="modeDisplay" class="text-white/30 text-sm font-bold mb-2"></div>
+            <div class="text-white/50 text-lg font-semibold animate-bounce">KLIK JAWABAN BENAR!</div>
+        </div>
+    </div>
+
+    <div id="start-screen" class="px-4">
+        <h1 class="text-4xl md:text-7xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-2 text-center" style="filter: drop-shadow(0 0 15px rgba(59,130,246,0.6));">
+            ANGKASA MATEMATIKA
+        </h1>
+        <p class="text-gray-200 mb-6 text-lg text-center font-light">Jelajahi galaksi sambil belajar.</p>
+        
+        <!-- FITUR PILIH TOPIK -->
+        <div id="topicSelectorContainer" class="hidden mb-8 w-full max-w-sm z-20 relative animate-fade-in">
+            <label class="text-blue-300 text-xs font-bold mb-2 block text-center tracking-widest uppercase">PILIH MISI (TOPIK)</label>
+            <div class="relative">
+                <select id="topicSelect" onchange="selectTopic()" class="w-full bg-slate-800 text-white border-2 border-blue-500 rounded-xl p-3 pl-4 pr-10 text-lg font-bold appearance-none cursor-pointer hover:bg-slate-700 transition-colors focus:outline-none focus:ring-4 focus:ring-blue-500/30 shadow-lg">
+                    <!-- Options akan diisi otomatis dari Firebase -->
+                </select>
+                <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-blue-400 font-bold">▼</div>
+            </div>
+        </div>
+
+        <p id="config-status" class="text-yellow-400/80 mb-8 text-sm italic flex justify-center gap-2 items-center">
+            <span class="loader"></span> Menghubungkan ke Server...
+        </p>
+        <button id="startBtn" class="btn opacity-50 cursor-not-allowed" disabled onclick="startGame()">MULAI MISI</button>
+    </div>
+
+    <div id="game-over-screen" class="hidden">
+        <h2 class="text-5xl font-bold text-white mb-2 hud-text" id="endTitle">SELESAI</h2>
+        <div class="bg-slate-800/80 p-6 rounded-2xl border border-slate-600 mb-8 text-center min-w-[300px]">
+            <p class="text-gray-400 text-sm mb-2 uppercase tracking-widest">Skor Akhir Kamu</p>
+            <p class="text-6xl font-extrabold text-yellow-400 mb-2" id="finalScore">0</p>
+            <div id="bonusInfo" class="text-green-400 text-sm font-bold hidden">
+                (+ Bonus Nyawa: <span id="bonusValue">0</span>)
+            </div>
+            <p class="text-white/60 text-sm mt-2" id="endMessage">Hebat!</p>
+        </div>
+        <button class="btn" onclick="goToMenu()">KEMBALI KE MENU</button>
+    </div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // --- 1. KONFIGURASI GURU ---
+    const TEACHER_UID = "RD2nfJyVBsRUKepceh0EJW1KAy83"; 
+
+    const userFirebaseConfig = {
+        apiKey: "AIzaSyDONREHxQdqdTu-Y5XC2Pdt3KOqXMN5JIw",
+        authDomain: "les-pesawatluarangkasa.firebaseapp.com",
+        projectId: "les-pesawatluarangkasa",
+        storageBucket: "les-pesawatluarangkasa.firebasestorage.app",
+        messagingSenderId: "426230505310",
+        appId: "1:426230505310:web:6638a3a08b7e10e936b9cf"
+    };
+
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userFirebaseConfig;
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+    // --- Game Data ---
+    let gameConfig = { speed: 1, mode: 'auto', questions: [], fontFamily: "'Segoe UI', sans-serif" };
+    let currentUser = null;
+    let activeQuestionsList = []; 
+
+    // --- Auth Logic ---
+    const initAuth = async () => {
+        try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        } catch (error) {
+            console.error("Auth Error:", error);
+            document.getElementById('config-status').innerText = "Gagal koneksi server (Offline mode)";
+            enableStartButton();
+        }
+    };
+    initAuth();
+
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            currentUser = user;
+            await loadSettings();
+        }
+    });
+
+    async function loadSettings() {
+        const statusEl = document.getElementById('config-status');
+        const selectorContainer = document.getElementById('topicSelectorContainer');
+        const topicSelect = document.getElementById('topicSelect');
+
+        try {
+            let targetUid = currentUser.uid;
+            if (TEACHER_UID && TEACHER_UID.trim() !== "") targetUid = TEACHER_UID;
+
+            let docRef;
+            if (typeof __firebase_config !== 'undefined') {
+                docRef = doc(db, 'artifacts', appId, 'users', targetUid, 'game_data', 'settings');
+            } else {
+                docRef = doc(db, 'users', targetUid, 'game_data', 'settings');
+            }
+            
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                gameConfig = data;
+                
+                // --- LOGIKA PILIH TOPIK ---
+                if (gameConfig.mode === 'custom' && gameConfig.questionGroups) {
+                    topicSelect.innerHTML = '';
+                    const groupIds = Object.keys(gameConfig.questionGroups);
+                    const activeGroups = groupIds.filter(id => gameConfig.questionGroups[id].isEnabled !== false);
+                    
+                    if (activeGroups.length > 0) {
+                        activeGroups.forEach(id => {
+                            const group = gameConfig.questionGroups[id];
+                            const opt = document.createElement('option');
+                            opt.value = id;
+                            opt.text = `${group.name} (${group.questions.length} item)`;
+                            if (id === gameConfig.activeGroupId) opt.selected = true;
+                            topicSelect.appendChild(opt);
+                        });
+                        selectorContainer.classList.remove('hidden');
+                        window.selectTopic();
+                        statusEl.innerText = "Siap Bermain!";
+                    } else {
+                        statusEl.innerText = "Tidak ada topik aktif.";
+                        selectorContainer.classList.add('hidden');
+                    }
+                } else if (gameConfig.mode === 'custom' && gameConfig.questions) {
+                    activeQuestionsList = gameConfig.questions;
+                    statusEl.innerText = "Mode Custom (Legacy)";
+                    selectorContainer.classList.add('hidden');
+                } else {
+                    statusEl.innerText = "Mode Otomatis";
+                    selectorContainer.classList.add('hidden');
+                    activeQuestionsList = [];
+                }
+            } else {
+                statusEl.innerText = "Data tidak ditemukan.";
+            }
+        } catch (e) {
+            console.error(e);
+            statusEl.innerText = "Gagal memuat data.";
+        }
+        enableStartButton();
+    }
+
+    // --- LOGIKA PERULANGAN SOAL ---
+    window.selectTopic = function() {
+        const select = document.getElementById('topicSelect');
+        const selectedId = select.value;
+        
+        if (gameConfig.questionGroups && gameConfig.questionGroups[selectedId]) {
+            const group = gameConfig.questionGroups[selectedId];
+            
+            // Expand list based on 'repeat' property
+            activeQuestionsList = [];
+            group.questions.forEach(q => {
+                const count = q.repeat || 1; 
+                for (let i = 0; i < count; i++) {
+                    // Clone object agar aman
+                    activeQuestionsList.push({...q});
+                }
+            });
+            
+            // Shuffle Array
+            for (let i = activeQuestionsList.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [activeQuestionsList[i], activeQuestionsList[j]] = [activeQuestionsList[j], activeQuestionsList[i]];
+            }
+
+            document.getElementById('modeDisplay').innerText = `Misi: ${group.name}`;
+        }
+    }
+
+    function enableStartButton() {
+        const btn = document.getElementById('startBtn');
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+
+    // ================== GAME LOGIC (Canvas) ==================
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let gameState = 'MENU';
+    let score = 0;
+    let health = 6; // NYAWA 6
+    
+    let currentQuestionData = { q: "0+0", a: 0 };
+    let currentDistractors = []; 
+
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        if(player) player.resetPosition();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // --- AUDIO SYSTEM (SFX + BGM) ---
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    
+    // Background Music (Ambient Drone)
+    let bgmNodes = [];
+    function playBackgroundMusic() {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        stopBackgroundMusic(); 
+        
+        const freqs = [110, 164.81, 196.00]; 
+        freqs.forEach((f, i) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = f;
+            gain.gain.value = 0.02; 
+            
+            const lfo = audioCtx.createOscillator();
+            lfo.frequency.value = 0.1 + (i * 0.05); 
+            const lfoGain = audioCtx.createGain();
+            lfoGain.gain.value = 0.01; 
+            
+            lfo.connect(lfoGain);
+            lfoGain.connect(gain.gain); 
+            lfo.start();
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            bgmNodes.push({osc, gain, lfo, lfoGain});
+        });
+    }
+
+    function stopBackgroundMusic() {
+        bgmNodes.forEach(n => {
+            try { 
+                n.osc.stop(); n.lfo.stop(); 
+                n.osc.disconnect(); n.gain.disconnect(); 
+            } catch(e){}
+        });
+        bgmNodes = [];
+    }
+
+    function playSound(type) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+
+        if (type === 'shoot') {
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+            gainNode.gain.setValueAtTime(0.05, now); gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+            osc.start(); osc.stop(now + 0.15);
+        } else if (type === 'explosion') {
+            osc.type = 'square'; osc.frequency.setValueAtTime(100, now); osc.frequency.exponentialRampToValueAtTime(10, now + 0.3);
+            gainNode.gain.setValueAtTime(0.1, now); gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+            osc.start(); osc.stop(now + 0.3);
+        } else if (type === 'correct') {
+            osc.type = 'sine'; osc.frequency.setValueAtTime(500, now); osc.frequency.setValueAtTime(1000, now + 0.1);
+            gainNode.gain.setValueAtTime(0.1, now); gainNode.gain.linearRampToValueAtTime(0, now + 0.4);
+            osc.start(); osc.stop(now + 0.4);
+        }
+    }
+
+    // --- Logic Soal (UPDATED: Ambil dan Hapus dari Antrian) ---
+    function generateMathProblem() {
+        const qDisplay = document.getElementById('questionDisplay');
+        
+        if (gameConfig.mode === 'custom') {
+            // Cek apakah antrian soal habis
+            if (activeQuestionsList.length === 0) {
+                // MENANG: Soal Habis
+                finishGame(true);
+                return;
+            }
+
+            // Ambil soal terakhir (pop) agar jumlah berkurang
+            const selected = activeQuestionsList.pop();
+            
+            if (selected && selected.q) {
+                currentQuestionData = selected;
+                
+                // LOGIKA TAMPILAN
+                if (selected.isQJava) {
+                    qDisplay.innerText = selected.q; 
+                    qDisplay.style.fontFamily = "'Genk Kobra', sans-serif";
+                    qDisplay.style.fontSize = "2.5rem"; 
+                } else {
+                    qDisplay.innerText = `${selected.q} = ?`; 
+                    qDisplay.style.fontFamily = "'Segoe UI', sans-serif";
+                    qDisplay.style.fontSize = "1.875rem"; 
+                }
+
+                currentDistractors = selected.distractors || [];
+            } else {
+                generateMathProblem(); // Skip jika data rusak
+            }
+        } else {
+            // Fallback Otomatis
+            let maxNum = 10;
+            if (score > 1000) maxNum = 20;
+            const num1 = Math.floor(Math.random() * maxNum) + 1;
+            const num2 = Math.floor(Math.random() * maxNum) + 1;
+            currentQuestionData = { q: `${num1} + ${num2}`, a: num1 + num2 };
+            currentDistractors = [];
+            
+            qDisplay.innerText = `${currentQuestionData.q} = ?`;
+            qDisplay.style.fontFamily = "'Segoe UI', sans-serif";
+        }
+    }
+
+    // --- Input & Entities ---
+    canvas.addEventListener('pointerdown', (e) => {
+        if (gameState !== 'PLAYING') return;
+        const rect = canvas.getBoundingClientRect();
+        handleInput(e.clientX - rect.left, e.clientY - rect.top);
+    });
+
+    function handleInput(x, y) {
+        lasers.push(new Laser(player.x + player.width/2, player.y, x, y));
+        playSound('shoot');
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            const enemy = enemies[i];
+            const dist = Math.hypot(x - enemy.x, y - enemy.y);
+            if (dist < enemy.radius + 20) { processHit(enemy); break; }
+        }
+    }
+
+    function processHit(enemy) {
+        createExplosion(enemy.x, enemy.y, enemy.isTarget ? '#fbbf24' : '#ef4444');
+        enemy.markedForDeletion = true;
+
+        if (enemy.isTarget) {
+            playSound('correct'); 
+            score += 100;
+            floatingTexts.push(new FloatingText("+100", enemy.x, enemy.y, '#fbbf24'));
+            
+            // Hancurkan musuh lain agar layar bersih saat ganti soal
+            enemies.forEach(e => {
+                if(!e.markedForDeletion) { createExplosion(e.x, e.y, 'rgba(148, 163, 184, 0.5)'); e.markedForDeletion = true; }
+            });
+            
+            generateMathProblem(); // Lanjut ke soal berikutnya (atau menang jika habis)
+
+        } else {
+            playSound('explosion'); 
+            health--; 
+            score -= 50; if (score < 0) score = 0;
+            floatingTexts.push(new FloatingText("-50", enemy.x, enemy.y, '#ef4444'));
+            screenShake = 10;
+        }
+        updateUI();
+        if (health <= 0) finishGame(false); // Kalah
+    }
+
+    // --- Classes ---
+    class NebulaGas {
+        constructor() {
+            this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height;
+            this.radius = Math.random() * 200 + 100; this.velocity = Math.random() * 0.2 + 0.05;
+            const colors = ['rgba(76, 29, 149, 0.1)', 'rgba(6, 78, 59, 0.1)', 'rgba(30, 58, 138, 0.1)']; 
+            this.color = colors[Math.floor(Math.random() * colors.length)];
+        }
+        update() { this.y += this.velocity; if (this.y - this.radius > canvas.height) { this.y = -this.radius; this.x = Math.random() * canvas.width; } }
+        draw() { ctx.save(); ctx.fillStyle = this.color; ctx.shadowBlur = 50; ctx.shadowColor = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    }
+    class BackgroundStar {
+        constructor() { this.x = Math.random()*canvas.width; this.y = Math.random()*canvas.height; this.size = Math.random()*2; this.speed = Math.random()*0.5+0.1; this.brightness = Math.random(); }
+        update() { this.y += this.speed * (gameConfig.speed || 1); if(this.y>canvas.height) {this.y=0;this.x=Math.random()*canvas.width;} this.brightness += 0.02; }
+        draw() { ctx.fillStyle = `rgba(255, 255, 255, ${Math.abs(Math.sin(this.brightness))})`; ctx.fillRect(this.x, this.y, this.size, this.size); }
+    }
+    class Player {
+        constructor() { this.width = 80; this.height = 100; this.resetPosition(); }
+        resetPosition() { this.x = canvas.width/2 - this.width/2; this.y = canvas.height - this.height - 30; }
+        draw() {
+            ctx.save(); ctx.shadowColor = '#3b82f6'; ctx.shadowBlur = 20; ctx.fillStyle = '#1e3a8a'; 
+            ctx.beginPath(); ctx.moveTo(this.x+this.width/2, this.y); ctx.lineTo(this.x+this.width, this.y+this.height);
+            ctx.lineTo(this.x+this.width/2, this.y+this.height-20); ctx.lineTo(this.x, this.y+this.height); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#93c5fd'; ctx.beginPath(); ctx.arc(this.x+this.width/2, this.y+this.height/2, 12, 0, Math.PI*2); ctx.fill(); ctx.restore();
+        }
+    }
+    class Laser {
+        constructor(sx, sy, tx, ty) { this.sx=sx; this.sy=sy; this.tx=tx; this.ty=ty; this.life=1.0; }
+        update() { this.life -= 0.08; }
+        draw() { if(this.life<=0)return; ctx.save(); ctx.globalAlpha=this.life; ctx.strokeStyle='#60a5fa'; ctx.lineWidth=3; ctx.lineCap='round'; ctx.shadowBlur=15; ctx.shadowColor='#fff'; ctx.beginPath(); ctx.moveTo(this.sx, this.sy); ctx.lineTo(this.tx, this.ty); ctx.stroke(); ctx.restore(); }
+    }
+    class Enemy {
+        constructor(isCorrect) {
+            this.radius = 45; this.x = Math.random()*(canvas.width-this.radius*2)+this.radius; this.y = -this.radius;
+            this.speed = (Math.random()*1+0.5) * (gameConfig.speed || 1);
+            
+            this.colorFill = '#334155'; 
+            this.colorStroke = '#94a3b8'; 
+            this.useJavaFont = false;
+
+            if (isCorrect) {
+                this.value = currentQuestionData.a; 
+                this.isTarget = true;
+                this.useJavaFont = currentQuestionData.isAJava; 
+            } else {
+                let wrongVal;
+                if (currentDistractors && currentDistractors.length > 0) {
+                    const idx = Math.floor(Math.random() * currentDistractors.length);
+                    wrongVal = currentDistractors[idx];
+                    
+                    if(idx === 0) this.useJavaFont = currentQuestionData.isD1Java;
+                    else if(idx === 1) this.useJavaFont = currentQuestionData.isD2Java;
+                    
+                } else {
+                    let attempts = 0; do { wrongVal = currentQuestionData.a + Math.floor(Math.random()*10)-5; attempts++; } while((wrongVal===currentQuestionData.a || wrongVal<0)&&attempts<10);
+                    if(wrongVal===currentQuestionData.a) wrongVal+=1;
+                    this.useJavaFont = false;
+                }
+                this.value = wrongVal; 
+                this.isTarget = false; 
+            }
+            this.angle = Math.random()*Math.PI*2; this.rotationSpeed = Math.random()*0.02-0.01; this.sides = Math.floor(Math.random()*3)+6;
+        }
+        update() { this.y += this.speed; this.angle += this.rotationSpeed; if (this.y > canvas.height + this.radius) this.markedForDeletion = true; }
+        draw() {
+            ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
+            ctx.fillStyle = this.colorFill; ctx.strokeStyle = this.colorStroke; ctx.lineWidth = 3;
+            ctx.beginPath(); for(let i=0; i<this.sides; i++){ const theta=(i/this.sides)*Math.PI*2; const r=this.radius*(0.9+Math.sin(i*3)*0.1); if(i===0)ctx.moveTo(Math.cos(theta)*r, Math.sin(theta)*r); else ctx.lineTo(Math.cos(theta)*r, Math.sin(theta)*r); } ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+            
+            ctx.fillStyle = '#ffffff'; 
+            if (this.useJavaFont) {
+                ctx.font = 'bold 36px "Genk Kobra", sans-serif';
+            } else {
+                ctx.font = 'bold 28px "Segoe UI", sans-serif'; 
+            }
+            ctx.shadowColor="black"; ctx.shadowBlur=4; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.value, this.x, this.y); ctx.shadowBlur=0;
+        }
+    }
+    class Particle {
+        constructor(x, y, color) { this.x=x; this.y=y; this.color=color; this.life=1.0; this.vx=(Math.random()-0.5)*8; this.vy=(Math.random()-0.5)*8; }
+        update() { this.x+=this.vx; this.y+=this.vy; this.life-=0.04; }
+        draw() { ctx.save(); ctx.globalAlpha=this.life; ctx.fillStyle=this.color; ctx.beginPath(); ctx.arc(this.x, this.y, Math.random()*3+2, 0, Math.PI*2); ctx.fill(); ctx.restore(); }
+    }
+    class FloatingText {
+        constructor(text, x, y, color) { this.text=text; this.x=x; this.y=y; this.color=color; this.life=1.0; }
+        update() { this.y-=1.5; this.life-=0.02; }
+        draw() { ctx.save(); ctx.globalAlpha=this.life; ctx.fillStyle=this.color; ctx.shadowBlur=5; ctx.shadowColor=this.color; ctx.font='bold 26px Arial'; ctx.fillText(this.text, this.x, this.y); ctx.restore(); }
+    }
+
+    // --- Global Vars & Loops ---
+    let player, lasers=[], enemies=[], particles=[], floatingTexts=[], stars=[], nebulas=[];
+    let enemyTimer=0, enemyInterval=1500, screenShake=0;
+
+    function init() {
+        resizeCanvas(); player = new Player();
+        lasers=[]; enemies=[]; particles=[]; floatingTexts=[]; stars=[]; nebulas=[];
+        for(let i=0; i<100; i++) stars.push(new BackgroundStar());
+        for(let i=0; i<6; i++) nebulas.push(new NebulaGas());
+        score = 0; health = 6; // NYAWA 6
+        enemyInterval = 1500 / (gameConfig.speed || 1); 
+        
+        // REBUILD LIST SOAL SAAT RESTART
+        if(gameConfig.mode === 'custom') {
+            window.selectTopic(); 
+        }
+        
+        generateMathProblem(); updateUI();
+    }
+    function createExplosion(x, y, color) { for(let i=0; i<12; i++) particles.push(new Particle(x, y, color)); }
+    function updateUI() { document.getElementById('scoreDisplay').innerText = score; document.getElementById('healthDisplay').innerText = "❤️".repeat(Math.max(0, health)); }
+    
+    // --- UPDATED SPAWN LOGIC ---
+    function spawnEnemies(deltaTime) {
+        if (enemyTimer > enemyInterval) {
+            const activeEnemies = enemies.length;
+            const hasCorrect = enemies.some(e => e.isTarget);
+            
+            let spawnCorrect = false;
+            
+            if (!hasCorrect) {
+                if (Math.random() < 0.4 + (activeEnemies * 0.2)) {
+                    spawnCorrect = true;
+                }
+            } else {
+                if (Math.random() < 0.2) spawnCorrect = true;
+            }
+
+            enemies.push(new Enemy(spawnCorrect));
+            enemyTimer = 0;
+        } else { enemyTimer += deltaTime; }
+    }
+
+    let lastTime = 0;
+    function animate(timeStamp) {
+        if (gameState !== 'PLAYING') return;
+        const deltaTime = timeStamp - lastTime; lastTime = timeStamp;
+        let sx=0, sy=0; if(screenShake > 0) { sx=Math.random()*screenShake-screenShake/2; sy=Math.random()*screenShake-screenShake/2; screenShake *= 0.9; }
+        ctx.save(); ctx.translate(sx, sy); ctx.clearRect(-sx, -sy, canvas.width, canvas.height); 
+        nebulas.forEach(n => { n.update(); n.draw(); }); stars.forEach(s => { s.update(); s.draw(); });
+        player.draw(); spawnEnemies(deltaTime);
+        enemies.forEach(e => { e.update(); e.draw(); }); enemies = enemies.filter(e => !e.markedForDeletion && e.y < canvas.height + 150);
+        lasers.forEach(l => { l.update(); l.draw(); }); lasers = lasers.filter(l => l.life > 0);
+        particles.forEach(p => { p.update(); p.draw(); }); particles = particles.filter(p => p.life > 0);
+        floatingTexts.forEach(f => { f.update(); f.draw(); }); floatingTexts = floatingTexts.filter(f => f.life > 0);
+        ctx.restore(); requestAnimationFrame(animate);
+    }
+
+    // --- Control Flow ---
+    window.startGame = function() {
+        if (gameConfig.mode === 'custom' && (!activeQuestionsList || activeQuestionsList.length === 0)) {
+            alert("Maaf, topik ini belum memiliki soal. Silakan pilih topik lain atau minta admin menambahkan soal.");
+            return;
+        }
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('game-over-screen').classList.add('hidden');
+        document.getElementById('ui-layer').classList.remove('hidden');
+        gameState = 'PLAYING'; 
+        playBackgroundMusic(); // Start Music
+        init(); lastTime = performance.now(); requestAnimationFrame(animate);
+    }
+    window.goToMenu = function() {
+        gameState = 'MENU';
+        stopBackgroundMusic(); // Stop Music
+        document.getElementById('ui-layer').classList.add('hidden');
+        document.getElementById('game-over-screen').classList.add('hidden');
+        document.getElementById('start-screen').classList.remove('hidden');
+        
+        enemies = [];
+        bullets = [];
+        window.selectTopic(); // Reset list soal
+    }
+    window.resetGame = function() { window.goToMenu(); }
+    
+    // --- END GAME & BONUS CALCULATION ---
+    function finishGame(isWin) {
+        gameState = 'GAMEOVER'; 
+        stopBackgroundMusic(); 
+        
+        const endTitle = document.getElementById('endTitle');
+        const endMessage = document.getElementById('endMessage');
+        const bonusInfo = document.getElementById('bonusInfo');
+        const bonusValue = document.getElementById('bonusValue');
+        
+        if (isWin) {
+            // Hitung Bonus: Sisa Nyawa * 100
+            const bonus = Math.max(0, health) * 100;
+            score += bonus;
+            
+            endTitle.innerText = "MISI SELESAI!";
+            endTitle.className = "text-5xl font-bold text-green-400 mb-2 hud-text";
+            endMessage.innerText = "Semua soal berhasil dijawab!";
+            
+            // Tampilkan info bonus
+            if(bonus > 0) {
+                bonusInfo.classList.remove('hidden');
+                bonusValue.innerText = bonus;
+            } else {
+                bonusInfo.classList.add('hidden');
+            }
+        } else {
+            // Kalah (Nyawa habis)
+            endTitle.innerText = "GAME OVER";
+            endTitle.className = "text-5xl font-bold text-red-500 mb-2 hud-text";
+            endMessage.innerText = "Jangan menyerah, coba lagi!";
+            bonusInfo.classList.add('hidden');
+        }
+
+        document.getElementById('finalScore').innerText = score; 
+        document.getElementById('game-over-screen').classList.remove('hidden'); 
+        document.getElementById('ui-layer').classList.add('hidden');
+    }
+</script>
+</body>
+</html>
